@@ -1,0 +1,64 @@
+function LAP = model_inversion(data)
+
+% Input 1: 'data' is the timeseries input of size nxt, where n is the
+% number of regions and t is the number of time points.
+
+% Outout: 'LAP' is the structure containing the result of Bayesian model
+% inversion using generalised filtering, see 'spm_LAP'
+
+% Defaults are set to priors of zero for intrinsic (P.A) and extrinsic
+% coupling (P.C), as well as for external input U
+
+% specify states and parameters
+%==========================================================================
+n           = size(data,1);            	% number of regions
+N           = size(data,2);             % number of time points
+
+% initialize model states
+%--------------------------------------------------------------------------
+x.z         = zeros(n,1);             	% amplitude of signal
+
+% prior means
+%--------------------------------------------------------------------------
+P.A         = zeros(n);                 % intrinsic coupling
+P.C         = zeros(n,1);           	% extrinsic coupling
+
+% prior variance
+%--------------------------------------------------------------------------
+pC.A        = ones(n);                  % intrinsic coupling
+pC.C        = ones(n,1);                % extrinsic coupling
+
+% observation function (to generate timeseries)
+%--------------------------------------------------------------------------
+g           = @(x,v,P) x.z;             % dependent variable
+
+% equations of motion
+%--------------------------------------------------------------------------
+f           = @(x,v,P) P.A*x.z+P.C*v;   % Equation 7
+
+% first level state space model
+%--------------------------------------------------------------------------
+DEM.M(1).x  = x;                       	% initial states
+DEM.M(1).f  = f;                    	% equations of motion
+DEM.M(1).g  = g;                    	% observation mapping
+DEM.M(1).pE = P;                      	% model parameters
+DEM.M(1).pC = diag(spm_vec(pC));        % prior variance
+DEM.M(1).V  = exp(4);                  	% precision of observation noise
+DEM.M(1).W  = exp(4);                	% precision of state noise
+
+% second level causes or exogenous forcing term
+%--------------------------------------------------------------------------
+DEM.M(2).v  = 0;                      	% initial causes
+DEM.M(2).V  = exp(4);                 	% precision of exogenous causes
+
+% causes or exogenous input
+%--------------------------------------------------------------------------
+DEM.U   	= zeros(1,N);             	% exogenous input
+
+% data input
+%--------------------------------------------------------------------------
+DEM.Y       = data;
+
+% Inversion using generalised filtering
+%==========================================================================
+LAP         = spm_LAP(DEM);
